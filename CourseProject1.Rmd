@@ -1,0 +1,156 @@
+---
+title: "Reproducible_Research_Project1"
+author: "Wesley Loftie-Eaton"
+date: "7/18/2019"
+output: html_document
+---
+
+
+```{r, echo = FALSE}
+# Load packages 
+library(dplyr)
+library(ggplot2)
+```
+
+### 1. Code for reading in the dataset and/or processing the data
+
+```{r, cache = TRUE}
+fileURL <- "https://d396qusza40orc.cloudfront.net/repdata%2Fdata%2Factivity.zip"
+#download.file(fileURL, destfile = "dat.zip", method = "curl")
+unzip(zipfile = "dat.zip", exdir = "./data")
+
+Download.date <- Sys.Date()
+
+dat <- read.csv("data/activity.csv", header = TRUE)
+```
+
+* The data for this project was download on `r Download.date` from `r fileURL`.
+* Rows with NAs are excluded
+
+```{r}
+# Print the first 20 rows
+head(dat, 20)
+```
+
+
+### 2. Histogram of the total number of steps taken each day
+
+```{r}
+# Group by day and calculate the total steps for each day
+Group.by.day <- group_by(dat, date)
+Steps.day <- summarise(Group.by.day, Total = sum(steps))
+
+# Use ggplot to plot a histogram of the total steps per day
+
+plot.Steps.Day <- ggplot(Steps.day, aes(Total)) +
+    labs(x = "Total steps per day", title = "Histogram of the total number of steps per day") +
+    geom_histogram(bins = 20)
+
+plot.Steps.Day
+```
+
+
+### 3. Mean and median number of steps taken each day
+
+```{r}
+summary(Steps.day)
+```
+The median and mean steps per day is 10765 and 10766, respectively
+
+
+## 4. Time series plot of the average number of steps taken
+
+```{r}
+# Calculate the average number of steps for each interval across all days
+Av.steps.interval <- aggregate(steps ~ interval, dat, mean)
+
+# Plot a time series graph of the average steps for each interval
+plot.Steps.interval <- ggplot(Av.steps.interval, aes(x = interval, y = steps)) +
+    labs(x = "Interval", y = "Average steps per interval (all days)") +
+    geom_line()
+
+plot.Steps.interval
+```
+
+
+### 5. The 5-minute interval that, on average, contains the maximum number of steps
+
+```{r}
+# Rank the the average steps in descending order
+Most.steps <- with(Av.steps.interval, order(-steps))
+
+# Extract the top-ranking interval
+Most.steps2 <- Av.steps.interval[Most.steps[1], ]
+
+Most.steps2
+```
+
+### 6. Code to describe and show a strategy for imputing missing data
+
+```{r}
+# Determine the number of NAs
+num.NAs.before <- nrow(dat[!complete.cases(dat$steps), ])
+
+# replace NAs with the average steps for that interval across all days
+dat2 <- dat
+for(i in 1:length(dat2[,1])){
+    if (is.na(dat$steps[i])) {
+        na.interval <- dat2$interval[i]
+        av.steps <- Av.steps.interval[Av.steps.interval$interval == na.interval, ]
+        dat2$steps[i] <- av.steps$steps
+        }
+}
+
+# Confirm that there are no longer any NAs
+num.NAs.after <- nrow(dat2[!complete.cases(dat2$steps), ])
+```
+
+There are `r num.NAs.before` NAs in the original dataset and `r num.NAs.after` NAs after they were removed. 
+
+### 7. Histogram of the total number of steps taken each day after missing values are imputed
+
+```{r}
+# Using the dataset without missing values, regroup the data by day and sum the total steps per day
+Group.by.day2 <- group_by(dat2, date)
+Steps.day2 <- summarise(Group.by.day2, Total = sum(steps))
+
+# Use ggplot to plot ahistogram of the total steps per day
+plot.Steps.Day2 <- ggplot(Steps.day2, aes(Total)) +
+    labs(x = "Total steps per day", title = "Histogram of the total number of steps per day after NA replacement") +
+    geom_histogram(bins = 20)
+
+plot.Steps.Day2
+```
+
+
+### 8.Panel plot comparing the average number of steps taken per 5-minute interval across weekdays and weekends
+
+```{r}
+# Catagorize days as weekday or weekend
+dat2$day <- weekdays(as.Date(dat2$date))
+
+Weekdays <- c("Monday", "Tuesday", "Wednesday", "Thursday", "Friday")
+Weekend <- c("Saturday", "Sunday")
+
+dat.weekdays <- filter(dat2, day %in% Weekdays)
+dat.weekend <- filter(dat2, day %in% Weekend)
+
+
+# Calculate the average number of steps for each interval across all days
+av.weekday.steps <- aggregate(steps ~ interval, dat.weekdays, mean)
+av.weekday.steps$day <- "Weekday"
+
+av.weekend.steps <- aggregate(steps ~ interval, dat.weekend, mean)
+av.weekend.steps$day <- "Weekend"
+
+Grouped.steps <- as.data.frame(rbind(av.weekday.steps, av.weekend.steps))
+
+# Plot the data in two plots separated as weekday or weekend
+
+plot.Steps.interval2 <- ggplot(Grouped.steps, aes(x = interval, y = steps)) +
+    labs(x = "Interval", y = "Average steps per interval") +
+    geom_line() +
+    facet_grid(Grouped.steps$day ~ .)
+
+plot.Steps.interval2
+```
